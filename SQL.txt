@@ -1,0 +1,301 @@
+/*Our portfolio of bicycles has become quite large, maybe too large.  
+Management has asked that we evaluate sales of bicycles over the last 
+two years, i.e. calendar years 2007 & 2008, to identify the 20 bicycle 
+SKUs with the lowest number of units sold through our resellers channel. 
+We intend to use the information on these SKUs to evaluate a portfolio
+rationalization plan. Ignore for now product SKUs that sold no units 
+during this period.*/
+
+Select Top 20 With Ties
+	b.ProductAlternateKey As 'Product SKU',
+	Count(a.OrderQuantity) As 'UnitSold'
+From FactResellerSales a
+INNER JOIN DimProduct b
+	On a.ProductKey=b.ProductKey
+INNER JOIN DimDate c
+	On a.OrderDateKey=c.DateKey
+Where b.EnglishProductCategoryName = 'Bikes' AND
+	  c.CalendarYear in ('2007','2008')
+Group by b.ProductAlternateKey
+Order by Count(a.OrderQuantity) ASC;
+
+
+
+/*In the US, sales of products in the 'Caps' product subcategory
+are a good indicator of market awareness of our brand. Adventure
+Works has only recently begun selling caps and other clothing items
+online so that the quantity of caps sold through this channel is 
+expected to be fairly low. Still, we know that some US states 
+are generating cap sales in higher quantities than others.
+
+We intend to launch a marketing campaign soon to drive greater 
+awareness of our online site.  Help us identify in which states we
+already have good awareness so that we can focus our investment on
+the others. Let's use sales of 100 or more caps within a state as 
+an indicator that no more marketing investment is required in that
+geography.*/ 
+
+
+Select c.StateProvinceName,
+	Count(a.OrderQuantity) As 'UnitSold'
+From FactInternetSales a
+INNER JOIN DimProduct b
+	On a.ProductKey = b.ProductKey
+INNER JOIN DimCustomer c
+	On a.CustomerKey = c.CustomerKey
+Where b.EnglishProductSubcategoryName = 'Caps' AND
+	c.EnglishCountryRegionName = 'United States'
+Group by StateProvinceName
+Having Count(a.OrderQuantity) >= 100;
+
+
+/*We are conducting a marketing campaign targeting female customers living in the 
+United States.  Which female customers (in the US) have purchased something from us  
+(through our web site) in calendar year 2008?  Be sure to return a distinct list of customers. 
+Return the CustomerAlternateKey as well as some friendlier customer identifying 
+information in your results.*/
+
+Select  DISTINCT
+	CustomerAlternateKey, 
+	FirstName,
+	LastName,
+	StateProvinceName As 'State',
+	CountryRegionCode As 'Country Code'
+FROM FactInternetSales a
+INNER JOIN DimCustomer b 
+	ON a.CustomerKey = b.CustomerKey
+INNER JOIN DimDate c
+	ON a.OrderDateKey = c.DateKey
+Where
+	Gender = 'F' AND
+	CountryRegionCode = 'US' AND
+	CalendarYear = '2008';
+
+
+/*We commonly seek to trigger reseller purchases of bicycles through the use of promotions
+that discount the price of the bikes. Do we have any bicycle sales from resellers where
+the 'No Discount' promotion was applied?  Provide the sales order number, product SKU, order date 
+and quantity sold if any of these sales are found.  Use column aliasing to make sure field 
+names clearly identify each of these elements and return data with the most recent of these
+sales first.*/
+
+Select 
+	SalesOrderNumber,
+	ProductAlternateKey As 'Product SKU',
+	FullDateAlternateKey As 'Date Ordered',
+	OrderQuantity As 'Quantity Sold'
+From 
+	FactResellerSales a 
+INNER JOIN DimPromotion b
+	ON a.PromotionKey = b.PromotionKey
+INNER JOIN DimProduct c
+	ON a.ProductKey = c.ProductKey
+INNER JOIN DimDate d
+	ON	a.OrderDateKey=d.DateKey
+Where
+	c.EnglishProductCategoryName='Bikes' AND
+	b.EnglishPromotionName = 'No Discount'
+Order by 'Date Ordered' DESC;
+
+
+/*In calendar year 2006, the CMO of Adventure Works executed a series of 
+promotions extending larger than normal discount amounts to resellers' 
+purchases of products across our Bikes category to drive larger orders 
+through this channel. These promotions were scaled back in 2007 and 
+replaced with a series of smaller promotional offers still targeting 
+the sale of Bikes but applicable across a wider range of order sizes. 
+Some of our larger resellers complained about this shift in promotional 
+practices, stating that their average discount amount on Bikes is smaller 
+in 2007 than in 2006. However, our CMO contends that the average discount 
+amount applied to Bicycle purchases across the reseller channel has 
+remained about the same between 2006 and 2007. How could both parties have
+such differing views of the situation?
+
+Provide me a SQL query evaluating discount amounts applied to 'Bikes' in
+calendar years 2006 & 2007. Include averages of discount amount (with no 
+consideration of order quantities) that reflect both the CMO and the 
+reseller's point of views.*/
+
+
+
+Select CalendarYear,
+	Avg(DiscountAmount) As 'Reseller Avg Discount',
+	Avg(Coalesce(DiscountAmount, 0)) As 'CMO Avg Discount'
+From FactResellerSales a
+INNER JOIN DimProduct b
+	ON a.ProductKey = b.ProductKey
+INNER JOIN DimDate c
+	ON a.OrderDateKey = c.DateKey
+Where EnglishProductCategoryName = 'Bikes' AND
+	CalendarYear in (2006,2007)
+Group by CalendarYear
+
+
+/*Assemble a data set containing nothing more than the unique ProductAlternateKey
+values for each bicycle in our DimProducts dimension.  Assemble another data
+set summarizing annual reseller sales amount for each bicycle (using its
+ProductAlternateKey) in calendar year 2007. Assemble one more data set 
+summarizing reseller sales amount for each bicycle (using its 
+ProductAlternateKey) in calendar year 2006.
+
+Using nesting techniques, bring together these three queries so that you 
+can show annual sales by ProductAlternateKey in 2007 side-by-side with 
+the corresponding sales for 2006. Be sure to join your 3 nested queries 
+in a way so that each product in the first set is preserved in the 
+final results, regardless of whether that product had sales in either 
+2006 or 2007.
+
+
+*/
+
+
+
+SELECT 
+	DISTINCT P.ProductAlternateKey,
+	S7.Sales_2007 AS Sales2007,
+	S6.Sales_2006 AS Sales2006
+FROM DimProduct P
+LEFT OUTER JOIN (
+	SELECT 
+		ProductAlternateKey,
+		SUM(SalesAmount) AS Sales_2007
+	FROM FactResellerSales RS
+	INNER JOIN DimProduct P 
+		ON P.ProductKey = RS.ProductKey
+	INNER JOIN DimDate DT 
+		ON DT.DateKey = RS.OrderDateKey
+	WHERE DT.CalendarYear = 2007
+	GROUP BY ProductAlternateKey
+		  ) S7 
+		ON S7.ProductAlternateKey = P.ProductAlternateKey
+LEFT OUTER JOIN (
+	SELECT 
+		ProductAlternateKey,
+		SUM(SalesAmount) AS Sales_2006
+	FROM FactResellerSales RS
+	INNER JOIN DimProduct P 
+		ON P.ProductKey = RS.ProductKey
+	INNER JOIN DimDate DT 
+		ON DT.DateKey = RS.OrderDateKey
+	WHERE DT.CalendarYear = 2006
+	GROUP BY ProductAlternateKey
+		  ) S6 
+		ON S6.ProductAlternateKey = P.ProductAlternateKey
+WHERE P.ProductCategoryAlternateKey = 1;
+
+
+/*What is the 2008 sales rank for the top 25 selling products of 2007? Present the 
+product rank for both years and sort the results on the 2007 rank from best to
+worst performing. Note: Products that sold in 2007 but that do not have sales in 
+2008 should have a NULL rank in that year (2008). */
+
+
+
+
+Select 
+	m.ProductAlternateKey,
+	m.Rank_2007,
+	n.Rank_2008
+From(
+	Select	
+		x.ProductKey,
+		x.ProductAlternateKey,
+		x.Sales_2007,
+		RANK() OVER (ORDER BY Sales_2007 DESC) as Rank_2007
+	From(
+		Select 
+			c.ProductKey,
+			c.ProductAlternateKey,
+			Sum(a.SalesAmount) as Sales_2007
+		From FactInternetSales a
+		INNER JOIN DimDate b
+			ON a.OrderDateKey=b.DateKey
+		INNER JOIN DimProduct c
+			ON a.ProductKey=c.ProductKey
+		Where b.CalendarYear = 2007
+		Group by c.ProductKey, ProductAlternateKey
+		) x
+	) m
+LEFT OUTER JOIN
+	(Select
+		y.ProductKey,
+		y.ProductAlternateKey,
+		y.Sales_2008,
+		RANK() OVER (ORDER BY Sales_2008 DESC) as Rank_2008
+	From(
+		Select 
+			c.ProductKey,
+			c.ProductAlternateKey,
+			Sum(a.SalesAmount) as Sales_2008
+		From FactInternetSales a
+		INNER JOIN DimDate b
+			ON a.OrderDateKey=b.DateKey
+		INNER JOIN DimProduct c
+			ON a.ProductKey=c.ProductKey
+		Where b.CalendarYear = 2008
+		Group by c.ProductKey, ProductAlternateKey
+		) y
+	) n
+	ON m.ProductKey=n.ProductKey
+Where Rank_2007 <=25
+Order by Rank_2007;
+
+
+/*Does an Internet customer's orders increase after their first 
+purchase from the Clothing category? Build a set showing a customer's purchase 
+history with sales amount reflecting all items in the order, clothing and non-clothing.
+Flag orders with 0 indicating the order is one taking place before the first purchase
+of clothing in the customer's purchase history or 1 indicating the order is one that 
+includes or takes place after the first purchase of clothing. Be mindful that 
+Customer is a Type 2 SCD so that the CustomerKey (surrogate key) value for that
+customer varies over time.  You may assume that a customer does not submit more than
+one order on a given date.  In addition, some customers may never purchase clothing;
+they should not be excluded from this result set. 
+
+Please keep in mind, your goal is not to answer the question presented at the top of
+this assignment but instead is to generate an appropriate data set which can be 
+delivered to an analytic tool (such as R or SAS) where that question would be answered.
+*/
+
+
+
+With History As
+		(SELECT
+			d.CustomerAlternateKey As CustomerID,
+			c.FullDateAlternateKey As OrderDate,
+			Sum(a.SalesAmount) As TotalSales
+		FROM FactInternetSales a
+		INNER JOIN DimProduct b
+			ON	a.ProductKey=b.ProductKey
+		INNER JOIN DimDate c
+			ON	a.OrderDateKey=c.DateKey
+		INNER JOIN DimCustomer d
+			ON a.CustomerKey=d.CustomerKey
+		Group by CustomerAlternateKey, FullDateAlternateKey
+		),
+	FirstClothing As
+		(Select DISTINCT 
+		CustomerAlternateKey As CustomerID,
+		Min(FullDateAlternateKey) As FirstClothingOrderDate
+	From FactInternetSales a
+	INNER JOIN DimProduct b
+		ON	a.ProductKey=b.ProductKey
+	INNER JOIN DimDate c
+		ON	a.OrderDateKey=c.DateKey
+	INNER JOIN DimCustomer d
+		ON a.CustomerKey=d.CustomerKey
+	Where b.EnglishProductCategoryName = 'Clothing'
+	Group by CustomerAlternateKey
+		)
+Select 
+	h.CustomerID,
+	h.OrderDate,
+	CASE WHEN h.OrderDate >= f.FirstClothingOrderDate Then 1
+		ELSE 0
+		END As Flag,
+	h.TotalSales
+From History h
+LEFT OUTER JOIN FirstClothing f
+	ON h.CustomerID = f.CustomerID
+Group by h.CustomerID, h.TotalSales, h.OrderDate, f.FirstClothingOrderDate, f.CustomerID
+Order by h.CustomerID, h.OrderDate
